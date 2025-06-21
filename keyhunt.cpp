@@ -7089,14 +7089,44 @@ void *thread_process_rmd160_bsgs(void *vargp) {
         free(tt);
         if(NTHREADS > 1)
                 omp_set_num_threads(1);
-        Int key,offset,inc;
-        offset.SetInt64(RMD160_BSGS_TABLE_SIZE);
-        offset.Mult((uint64_t)thread_number);
-        key.Set(&n_range_start);
-        key.Add(&offset);
+        Int key,inc,range_size,per_thread,remainder,thread_start,thread_end,tmp;
+
+        /* Calculate the range size and split it between the threads */
+        range_size.Set(&n_range_end);
+        range_size.Sub(&n_range_start);
+        range_size.AddOne();
+
+        tmp.SetInt32(NTHREADS);
+        per_thread.Set(&range_size);
+        per_thread.Div(&tmp,&remainder);
+
+        /* Compute the starting key for this thread */
+        thread_start.Set(&per_thread);
+        thread_start.Mult((uint64_t)thread_number);
+        thread_start.Add(&n_range_start);
+        uint64_t rem = remainder.GetInt64();
+        if((uint64_t)thread_number < rem){
+                Int extra; extra.SetInt64(thread_number);
+                thread_start.Add(&extra);
+        }else{
+                Int extra; extra.SetInt64(rem);
+                thread_start.Add(&extra);
+        }
+
+        /* Compute the ending key for this thread */
+        thread_end.Set(&per_thread);
+        if((uint64_t)thread_number < rem){
+                thread_end.AddOne();
+        }
+        thread_end.Add(&thread_start);
+        thread_end.SubOne();
+
+        /* Setup the increment between blocks */
         inc.SetInt64(RMD160_BSGS_TABLE_SIZE);
-        Int tmp; tmp.SetInt32(NTHREADS);
+        tmp.SetInt32(NTHREADS);
         inc.Mult(&tmp);
+
+        key.Set(&thread_start);
 #if defined(_WIN64) && !defined(__CYGWIN__)
         struct rmd160_entry *table = (struct rmd160_entry*)_aligned_malloc(sizeof(struct rmd160_entry)*RMD160_BSGS_TABLE_SIZE,64);
 #else
@@ -7111,7 +7141,7 @@ void *thread_process_rmd160_bsgs(void *vargp) {
 #else
         mlock(table, sizeof(struct rmd160_entry)*RMD160_BSGS_TABLE_SIZE);
 #endif
-        while(key.IsLowerOrEqual(&n_range_end)){
+        while(key.IsLowerOrEqual(&thread_end)){
                 generate_block(&key,RMD160_BSGS_TABLE_SIZE,table);
                 compare_block(table,RMD160_BSGS_TABLE_SIZE);
                 key.Add(&inc);
