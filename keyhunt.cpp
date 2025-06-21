@@ -2344,12 +2344,11 @@ int main(int argc, char **argv)	{
 			MPZAUX.Set(&seconds);
 			MPZAUX.Mod(&OUTPUTSECONDS);
 			if(MPZAUX.IsZero()) {
-				total.SetInt32(0);
-				for(j = 0; j < NTHREADS; j++) {
-					pretotal.Set(&debugcount_mpz);
-					pretotal.Mult(steps[j]);					
-					total.Add(&pretotal);
-				}
+                                total.SetInt32(0);
+                                for(j = 0; j < NTHREADS; j++) {
+                                        pretotal.SetInt64(steps[j]);
+                                        total.Add(&pretotal);
+                                }
 				
 				if(FLAGENDOMORPHISM)	{
 					if(FLAGMODE == MODE_XPOINT)	{
@@ -7142,10 +7141,23 @@ void *thread_process_rmd160_bsgs(void *vargp) {
         mlock(table, sizeof(struct rmd160_entry)*RMD160_BSGS_TABLE_SIZE);
 #endif
         while(key.IsLowerOrEqual(&thread_end)){
-                generate_block(&key,RMD160_BSGS_TABLE_SIZE,table);
-                compare_block(table,RMD160_BSGS_TABLE_SIZE);
+                Int remaining;
+                remaining.Set(&thread_end);
+                remaining.Sub(&key);
+                remaining.AddOne();
+
+                uint64_t blk = remaining.GetInt64();
+                if(blk > RMD160_BSGS_TABLE_SIZE)
+                        blk = RMD160_BSGS_TABLE_SIZE;
+
+                generate_block(&key,blk,table);
+                compare_block(table,blk);
+                steps[thread_number]+=blk;
+
+                if(blk < RMD160_BSGS_TABLE_SIZE)
+                        break;
+
                 key.Add(&inc);
-                steps[thread_number]+=RMD160_BSGS_TABLE_SIZE;
         }
 #if defined(_WIN64) && !defined(__CYGWIN__)
         VirtualUnlock(table, sizeof(struct rmd160_entry)*RMD160_BSGS_TABLE_SIZE);
