@@ -7146,9 +7146,14 @@ void *thread_process_rmd160_bsgs(void *vargp) {
                 remaining.Sub(&key);
                 remaining.AddOne();
 
-                uint64_t blk = remaining.GetInt64();
-                if(blk > RMD160_BSGS_TABLE_SIZE)
+                Int limit;
+                limit.SetInt64(RMD160_BSGS_TABLE_SIZE);
+                uint64_t blk;
+                if(remaining.IsGreater(&limit)){
                         blk = RMD160_BSGS_TABLE_SIZE;
+                }else{
+                        blk = remaining.GetInt64();
+                }
 
                 generate_block(&key,blk,table);
                 compare_block(table,blk);
